@@ -133,12 +133,90 @@ handle_rewrite_req(#httpd{
     % get rules from ddoc
     case couch_util:get_value(<<"rewrites">>, Props) of
         undefined ->
-            couch_httpd:send_error(Req, 404, <<"rewrite_error">>,
-                <<"Invalid path.">>);
+            couch_httpd:send_error(Req, 404, <<"rewrite_error">>, <<"Invalid path.">>);
         Bin when is_binary(Bin) ->
-            couch_httpd:send_error(Req, 400, <<"rewrite_error">>,
-                <<"Rewrite rules are a String. They must be a JSON Array.">>);
+            % JS rewrite
+            case couch_query_servers:rewrite(Req, _Db, DDoc) of
+            undefined ->
+                couch_httpd:send_error(Req, 404, <<"rewrite_error">>, <<"Invalid path.">>);
+            {Rewrite} ->
+
+                % figure out the method (extract or default)
+                RewMethod = couch_util:get_value(<<"method">>, Rewrite, couch_util:to_binary(Method)),
+
+                % get the path (blow up if absent)
+                RewPath = case couch_util:get_value(<<"path">>, Rewrite) of
+                    undefined ->
+                        couch_httpd:send_error(Req, 400, <<"rewrite_error">>, <<"Rewrite result must have .path">>);
+                    P -> ?b2l(P)
+                end,
+                RewPath1 = case mochiweb_util:safe_relative_path(RewPath) of
+                    undefined ->
+                        ?b2l(Prefix) ++ "/" ++ RewPath;
+                    P1 ->
+                        ?b2l(Prefix) ++ "/" ++ P1
+                end,
+                RewPath2 = ?b2l(iolist_to_binary(normalize_path(RewPath1))),
+
+                % build headers
+                Headers = case couch_util:get_value(<<"headers">>, Rewrite) of
+                    undefined ->
+                      mochiweb_headers:default(MochiReq:get(headers));
+                    {H} ->
+                      mochiweb_headers:enter_from_list(
+                        lists:map( fun({Key, Val}) -> {?b2l(Key), ?b2l(Val)} end, H ),
+                        MochiReq:get(headers)
+                      )
+                end,
+
+                couch_log:debug("rewrite to ~p with method ~p ~n", [RewPath2, RewMethod]),
+
+                MochiReq1 = mochiweb_request:new(MochiReq:get(socket),
+                                                 RewMethod,
+                                                 RewPath2,
+                                                 MochiReq:get(version),
+                                                 Headers),
+
+                Body = case couch_util:get_value(<<"body">>, Rewrite) of
+                  undefined -> erlang:get(mochiweb_request_body);
+                  B -> B
+                end,
+
+                case Body of
+                  undefined -> MochiReq1:cleanup();
+                  _ -> erlang:put(mochiweb_request_body, Body)
+                end,
+
+                case couch_util:get_value(<<"code">>, Rewrite) of
+                  undefined ->
+                      #httpd{
+                          db_url_handlers = DbUrlHandlers,
+                          design_url_handlers = DesignUrlHandlers,
+                          default_fun = DefaultFun,
+                          url_handlers = UrlHandlers
+                          %user_ctx = UserCtx,
+                          %auth = Auth
+                      } = Req,
+                      couch_httpd:handle_request_int(MochiReq1, DefaultFun,
+                          UrlHandlers, DbUrlHandlers, DesignUrlHandlers);
+                    %couch_httpd:handle_request_int(MochiReq1);
+                  ResCode ->
+                    couch_httpd:send_response(
+                      Req,
+                      ResCode,
+                      case couch_util:get_value(<<"headers">>, Rewrite) of
+                        undefined -> [];
+                        {H1} -> lists:map( fun({Key, Val}) -> {?b2l(Key), ?b2l(Val)} end, H1 )
+                      end,
+                      case Body of
+                        undefined -> [];
+                        Body1 -> Body1
+                      end
+                    )
+                end
+            end;
         Rules ->
+            % old-style rewrite,
             % create dispatch list from rules
             DispatchList =  [make_rule(Rule) || {Rule} <- Rules],
             Method1 = couch_util:to_binary(Method),
@@ -278,7 +356,7 @@ replace_var(Value, Bindings, Formats) when is_list(Value) ->
             end, [], Value));
 replace_var(Value, _Bindings, _Formats) ->
     Value.
-                    
+
 maybe_json(Key, Value) ->
     case lists:member(Key, [<<"key">>, <<"startkey">>, <<"start_key">>,
                 <<"endkey">>, <<"end_key">>, <<"keys">>]) of
@@ -321,7 +399,7 @@ format(<<"bool">>, Value) when is_list(Value) ->
         _ -> Value
     end;
 format(_Format, Value) ->
-   Value. 
+   Value.
 
 %% doc: build new patch from bindings. bindings are query args
 %% (+ dynamic query rewritten if needed) and bindings found in
@@ -337,7 +415,7 @@ make_new_path([?MATCH_ALL|_Rest], _Bindings, Remaining, Acc) ->
 make_new_path([{bind, P}|Rest], Bindings, Remaining, Acc) ->
     P2 = case couch_util:get_value({bind, P}, Bindings) of
         undefined -> << "undefined">>;
-        P1 -> 
+        P1 ->
             iolist_to_binary(P1)
     end,
     make_new_path(Rest, Bindings, Remaining, [P2|Acc]);
@@ -454,15 +532,15 @@ path_to_list([P|R], Acc, DotDotCount) ->
 
 maybe_encode_bindings([]) ->
     [];
-maybe_encode_bindings(Props) -> 
-    lists:foldl(fun 
+maybe_encode_bindings(Props) ->
+    lists:foldl(fun
             ({{bind, <<"*">>}, _V}, Acc) ->
                 Acc;
             ({{bind, K}, V}, Acc) ->
                 V1 = iolist_to_binary(maybe_json(K, V)),
                 [{K, V1}|Acc]
         end, [], Props).
-                
+
 decode_query_value({K,V}) ->
     case lists:member(K, ["key", "startkey", "start_key",
                 "endkey", "end_key", "keys"]) of

@@ -20,6 +20,22 @@
    :depth: 1
    :local:
 
+.. _release/1.7.2:
+
+Version 1.7.2
+=============
+
+Retirement Announcement
+-----------------------
+
+This will be the last release of the CouchDB 1.x line. There will be no more
+feature-, bugfix-, or security releases.
+
+Bug Fix
+-------
+
+- Fix config whitelist bypass
+
 .. _release/1.7.1:
 
 Version 1.7.1

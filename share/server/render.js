@@ -13,12 +13,12 @@
 
 var Mime = (function() {
   // registerType(name, mime-type, mime-type, ...)
-  // 
+  //
   // Available in query server sandbox. TODO: The list is cleared on reset.
   // This registers a particular name with the set of mimetypes it can handle.
   // Whoever registers last wins.
-  // 
-  // Example: 
+  //
+  // Example:
   // registerType("html", "text/html; charset=utf-8");
 
   var mimesByKey = {};
@@ -57,8 +57,8 @@ var Mime = (function() {
   registerType("url_encoded_form", "application/x-www-form-urlencoded");
   // http://www.ietf.org/rfc/rfc4627.txt
   registerType("json", "application/json", "text/x-json");
-  
-  
+
+
   var mimeFuns = [];
   function provides(type, fun) {
     Mime.providesUsed = true;
@@ -69,7 +69,7 @@ var Mime = (function() {
     // set globals
     Mime.providesUsed = false;
     mimeFuns = [];
-    Mime.responseContentType = null;  
+    Mime.responseContentType = null;
   };
 
   function runProvides(req, ddoc) {
@@ -113,7 +113,7 @@ var Mime = (function() {
     }
   };
 
-  
+
   return {
     registerType : registerType,
     provides : provides,
@@ -135,8 +135,8 @@ var Mime = (function() {
 var Render = (function() {
   var new_header = false;
   var chunks = [];
-  
-  
+
+
   //  Start chunks
   var startResp = {};
   function start(resp) {
@@ -155,7 +155,7 @@ var Render = (function() {
   function applyContentType(resp, responseContentType) {
     resp["headers"] = resp["headers"] || {};
     if (responseContentType) {
-      resp["headers"]["Content-Type"] = resp["headers"]["Content-Type"] || responseContentType;    
+      resp["headers"]["Content-Type"] = resp["headers"]["Content-Type"] || responseContentType;
     }
     return resp;
   }
@@ -195,7 +195,7 @@ var Render = (function() {
     return json[1];
   };
 
-  
+
   function maybeWrapResponse(resp) {
     var type = typeof resp;
     if ((type == "string") || (type == "xml")) {
@@ -255,7 +255,7 @@ var Render = (function() {
       if (type == 'object' || type == 'string') {
         respond(["resp", maybeWrapResponse(resp)]);
       } else {
-        throw(["error", "render_error", "undefined response from show function"]);      
+        throw(["error", "render_error", "undefined response from show function"]);
       }
     } catch(e) {
       if (args[0] === null && isDocRequestPath(args[1])) {
@@ -278,7 +278,7 @@ var Render = (function() {
       if (type == 'object' || type == 'string') {
         respond(["up", doc, maybeWrapResponse(resp)]);
       } else {
-        throw(["error", "render_error", "undefined response from update function"]);      
+        throw(["error", "render_error", "undefined response from update function"]);
       }
     } catch(e) {
       renderError(e, fun.toString());
@@ -303,7 +303,7 @@ var Render = (function() {
 
       if (Mime.providesUsed) {
         tail = Mime.runProvides(req, ddoc);
-      }    
+      }
       if (!gotRow) getRow();
       if (typeof tail != "undefined") {
         chunks.push(tail);
@@ -332,7 +332,7 @@ var Render = (function() {
                  .replace(/>/g, "&gt;");
   };
 
-  
+
   return {
     start : start,
     send : send,
@@ -350,6 +350,56 @@ var Render = (function() {
     }
   };
 })();
+
+// Rewrite as js
+
+var Rewrite = {
+  rewrite: function (fun, ddoc, args) {
+      var result, headers;
+      try {
+        result = fun.apply(ddoc, args);
+      } catch(error) {
+        if (error.name && error.stack) {
+          throw error;
+        }
+        respond(error);
+        return;
+      }
+      if (!result) throw(["error", "rewrite_error", "rewrite function could not produce mapping"]);
+
+      if (typeof result === "string") {
+          respond(["rew", { path: result, method: args[0].method }]);
+          return;
+      }
+      if (typeof result !== "object") throw(["error", "rewrite_error", "non-object response from rewrite function"]);
+
+      if (result.hasOwnProperty("body") && typeof result.body !== "string") {
+        throw(["error", "rewrite_error", "non-string body response from rewrite function"]);
+      }
+      if (result.hasOwnProperty("headers")) {
+        if ( typeof result.headers !== "object" ) {
+          throw(["error", "rewrite_error", "non-object headers response from rewrite function"]);
+        }
+        else headers = result.headers;
+      }
+      if (result.hasOwnProperty("code")) {
+        var rescode = result.code;
+        if (typeof rescode !== "number")
+          throw(["error", "rewrite_error", "non-number code response from rewrite function"]);
+        if (rescode !== parseInt(rescode) || rescode > 500 || rescode < 200)
+          throw(["error", "rewrite_error", "invalid code response from rewrite function"]);
+        if (rescode === 301 || rescode === 302) {
+          // must have headers.Location to redirect
+          if (!headers || !headers.Location)
+            throw(["error", "rewrite_error", "no location for redirect received from rewrite function"]);
+        }
+      }
+      if (!result.headers) result.headers = args[0].headers;
+      if (!result.method) result.method = args[0].method;
+      respond(["rew", result]);
+    }
+};
+
 
 // send = Render.send;
 // getRow = Render.getRow;

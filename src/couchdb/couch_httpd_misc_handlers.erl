@@ -181,7 +181,6 @@ handle_config_req(#httpd{method=Method, path_parts=[_, Section, Key]}=Req)
             % well-formed list which does not include the whitelist config
             % variable itself.
             FallbackWhitelist = [{<<"httpd">>, <<"config_whitelist">>}],
-
             Whitelist = case couch_util:parse_term(WhitelistValue) of
                 {ok, Value} when is_list(Value) ->
                     Value;
@@ -252,7 +251,7 @@ handle_approved_config_req(#httpd{method='PUT', path_parts=[_, Section, Key]}=Re
         <<"admins">> ->
             couch_passwords:hash_admin_password(RawValue);
         _ ->
-            RawValue
+            couch_util:trim(RawValue)
         end
     end,
 

@@ -13,7 +13,7 @@
 -module(couch_httpd_external).
 
 -export([handle_external_req/2, handle_external_req/3]).
--export([send_external_response/2, json_req_obj/2, json_req_obj/3]).
+-export([send_external_response/2, json_req_obj/2, json_req_obj/3, json_req2_obj/2]).
 -export([default_or_content_type/2, parse_external_response/1]).
 
 -import(couch_httpd,[send_error/4]).
@@ -79,7 +79,7 @@ json_req_obj(#httpd{mochi_req=Req,
     Headers = Req:get(headers),
     Hlist = mochiweb_headers:to_list(Headers),
     {ok, Info} = couch_db:get_db_info(Db),
-    
+
 % add headers...
     {[{<<"info">>, {Info}},
         {<<"id">>, DocId},
@@ -96,6 +96,35 @@ json_req_obj(#httpd{mochi_req=Req,
         {<<"cookie">>, to_json_terms(Req:parse_cookie())},
         {<<"userCtx">>, couch_util:json_user_ctx(Db)},
         {<<"secObj">>, couch_db:get_security(Db)}]}.
+
+% more compact and fast json_req_obj, for rewrites
+json_req2_obj(#httpd{mochi_req=Req,
+               method=Method,
+               path_parts=Path,
+               req_body=ReqBody
+            }, Db) ->
+    Body = case ReqBody of
+        undefined ->
+            MaxSize = list_to_integer(
+                couch_config:get("couchdb", "max_document_size", "4294967296")),
+            Req:recv_body(MaxSize);
+        Else -> Else
+    end,
+    Headers = Req:get(headers),
+    Hlist = mochiweb_headers:to_list(Headers),
+
+    % Build json_req2 object
+    {[ {<<"method">>, Method},
+      {<<"path">>, Path},
+      {<<"raw_path">>, ?l2b(Req:get(raw_path))},
+      {<<"query">>, json_query_keys(to_json_terms(Req:parse_qs()))},
+      {<<"headers">>, to_json_terms(Hlist)},
+      {<<"body">>, Body},
+      {<<"peer">>, ?l2b(Req:get(peer))},
+      {<<"cookie">>, to_json_terms(Req:parse_cookie())},
+      {<<"userCtx">>, couch_util:json_user_ctx(Db)},
+      {<<"secObj">>, couch_db:get_security(Db)}
+    ]}.
 
 to_json_terms(Data) ->
     to_json_terms(Data, []).
