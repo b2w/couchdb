@@ -37,11 +37,6 @@ build-aux/install-sh
 build-aux/ltmain.sh
 build-aux/missing
 build-aux/texinfo.tex
-config.h
-config.h.in
-config.log
-config.status
-configure
 couchdb.stderr
 couchdb.stdout
 cover/*
