@@ -3,7 +3,7 @@ CouchDB with customizable API
 
 CouchDB 1.7.2 with rewrite function
 -----------------------------------------------
-This is a fork of Apache CouchDB 1.7.2 with the rewrite function that was introduced in 2.0 is added.
+This is a fork of Apache CouchDB 1.7.2 with the rewrite function that was introduced in 2.0 added.
 The rewrite function allows for customizing the API of CouchDB and for creating firewalls, routers, round-robin load balancers, caching and more.
 In combination with the possibility to use CouchDB as a proxy for anything else on the net – a feature that was removed in CouchDB 2.x – the rewrite function was a small, but important step forward for those that explored CouchDB to create so-called "couch apps".
 
