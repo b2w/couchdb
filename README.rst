@@ -9,7 +9,7 @@ In combination with the possibility to use CouchDB as a proxy for anything else 
 
 As the Apache CouchDB project has discontinued the single-node 1.x branch and announced a priority to make CouchDB a pure database system, stripping it from the built-in web and application server functionality, this repo is a starting point for a new project that will emphasize these features.
 
-The creation of forks to pursue the features of the integrated web and app server   was encouraged by members of the Apache CouchDB PMC to stop a long-winding discussions about these features.
+The creation of forks to pursue the features of the integrated web and app server was encouraged by members of the Apache CouchDB PMC to stop a long-winded discussion about these features.
 
 CouchDB 1.7.2 – here with the rewrite function added – is released as an unofficial version 1.7.3.
 
